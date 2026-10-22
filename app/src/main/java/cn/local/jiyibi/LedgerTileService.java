@@ -4,6 +4,7 @@ import android.annotation.SuppressLint;
 import android.app.AlertDialog;
 import android.app.PendingIntent;
 import android.content.Intent;
+import android.graphics.drawable.Icon;
 import android.os.Build;
 import android.provider.Settings;
 import android.service.quicksettings.Tile;
@@ -16,6 +17,7 @@ public final class LedgerTileService extends TileService {
         super.onStartListening();
         Tile tile = getQsTile();
         if (tile != null) {
+            tile.setIcon(Icon.createWithResource(this, R.drawable.ic_ledger_scan));
             tile.setLabel("识别当前账单");
             tile.setSubtitle(CaptureService.isAvailable() ? "点一次，识别一次" : "需先开启识别服务");
             tile.setState(Tile.STATE_INACTIVE);

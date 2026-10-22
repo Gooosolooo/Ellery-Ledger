@@ -526,7 +526,7 @@ public final class MainActivity extends Activity {
         }
         StatusBarManager manager = getSystemService(StatusBarManager.class);
         manager.requestAddTileService(new ComponentName(this, LedgerTileService.class), "识别当前账单",
-                Icon.createWithResource(this, R.drawable.ic_ledger), getMainExecutor(), result -> {
+                Icon.createWithResource(this, R.drawable.ic_ledger_scan), getMainExecutor(), result -> {
                     if (result == StatusBarManager.TILE_ADD_REQUEST_RESULT_TILE_ADDED) {
                         message("已添加“识别当前账单”到快捷面板");
                     } else if (result == StatusBarManager.TILE_ADD_REQUEST_RESULT_TILE_ALREADY_ADDED) {
