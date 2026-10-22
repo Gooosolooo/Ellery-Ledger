@@ -1,0 +1,27 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'cn.local.jiyibi'
+    compileSdk 37
+
+    defaultConfig {
+        applicationId 'cn.local.jiyibi'
+        minSdk 30
+        targetSdk 35
+        versionCode 6
+        versionName '0.2.2'
+        testInstrumentationRunner 'cn.local.jiyibi.LedgerInstrumentation'
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+dependencies {
+    // 随 APK 打包中文模型，识别不依赖首次联网下载。
+    implementation 'com.google.mlkit:text-recognition-chinese:16.0.1'
+}

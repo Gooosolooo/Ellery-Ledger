@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- 与 Focus Buddy 一致：108dp 画布，居中缩放 0.5。 -->
+    <item android:width="108dp" android:height="108dp" android:gravity="center">
+        <inset android:inset="27dp">
+            <bitmap android:src="@drawable/ledger_icon_foreground" android:gravity="fill" android:filter="true" />
+        </inset>
+    </item>
+</layer-list>
