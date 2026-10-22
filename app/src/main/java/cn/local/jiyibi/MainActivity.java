@@ -74,12 +74,17 @@ public final class MainActivity extends Activity {
     private EditText noteField;
     private Spinner categoryField;
     private final List<String> categoryOptions = new ArrayList<>();
+    private LedgerFilter ledgerFilter = new LedgerFilter("", null, "");
 
     @Override
     protected void onCreate(Bundle state) {
         super.onCreate(state);
         database = new LedgerDatabase(this);
         activeTab = state == null ? 0 : state.getInt("active_tab", 0);
+        if (state != null) {
+            ledgerFilter = new LedgerFilter(state.getString("ledger_filter_date", ""),
+                    state.getString("ledger_filter_category"), state.getString("ledger_filter_keyword", ""));
+        }
         if (Build.VERSION.SDK_INT >= 33
                 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
             requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, 1);
@@ -202,6 +207,12 @@ public final class MainActivity extends Activity {
             showSettings();
             return;
         }
+        if (activeTab == 2) {
+            text("全部账目", 20);
+            body.addView(new LedgerBrowserView(this, entries, ledgerFilter, this::addEntryCard,
+                    filter -> ledgerFilter = filter), BlueUi.below(this, 0));
+            return;
+        }
         if (activeTab == 0) {
             showOverview(entries);
         } else {
@@ -284,6 +295,10 @@ public final class MainActivity extends Activity {
     }
 
     private void addEntryCard(LedgerEntry entry) {
+        addEntryCard(entry, body);
+    }
+
+    private void addEntryCard(LedgerEntry entry, LinearLayout container) {
         LinearLayout card = BlueUi.card(this);
         LinearLayout heading = BlueUi.row(this);
         String date = entry.getDate().isEmpty() ? "日期待补充" : entry.getDate();
@@ -330,7 +345,7 @@ public final class MainActivity extends Activity {
                 + "，" + moneyLabel(entry.getAmount()));
         card.setOnClickListener(view -> showEditor(entry));
         card.setFocusable(true);
-        body.addView(card, BlueUi.below(this, 12));
+        container.addView(card, BlueUi.below(this, 12));
     }
 
     private static String moneyLabel(String value) {
@@ -598,6 +613,9 @@ public final class MainActivity extends Activity {
             state.putString(EXTRA_ENTRY_ID, editing.getId());
         }
         state.putInt("active_tab", activeTab);
+        state.putString("ledger_filter_date", ledgerFilter.getDatePrefix());
+        state.putString("ledger_filter_category", ledgerFilter.getCategory());
+        state.putString("ledger_filter_keyword", ledgerFilter.getKeyword());
         super.onSaveInstanceState(state);
     }
 

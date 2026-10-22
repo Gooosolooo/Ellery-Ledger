@@ -1,5 +1,13 @@
 # Verification
 
+## Ledger filters (2026-10-23, source only)
+
+- Added 38 synthetic-data checks for day/month filtering, combined category/keyword matching, custom/empty categories, literal search punctuation, English case folding, stable date ordering, nonmutation of source records, empty results and reset criteria.
+- Covered exact decimal totals, invalid/missing draft amounts excluded from spending, leap days and malformed draft dates excluded from date-specific results.
+- Core suite: 89 business checks, 14 source-selection checks and 38 ledger-filter checks passed.
+- Java source compilation and Android Lint passed. No APK was generated or installed for this change.
+- Native wheel scrolling, dialog placement, keyboard interaction and state restoration still require emulator/device UI verification after the user builds the app in Android Studio.
+
 Verified on 2026-10-22.
 
 - JDK business tests: 60 checks passed, including explicit payment amounts, standalone amount candidates, conflicting amounts, missing merchant/product, manual notes and amount-only mode.
