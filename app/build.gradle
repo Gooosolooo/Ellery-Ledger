@@ -22,6 +22,7 @@ android {
 }
 
 dependencies {
+    implementation 'androidx.viewpager:viewpager:1.0.0'
     // 随 APK 打包中文模型，识别不依赖首次联网下载。
     implementation 'com.google.mlkit:text-recognition-chinese:16.0.1'
 }

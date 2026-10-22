@@ -34,6 +34,8 @@ import android.widget.Spinner;
 import android.widget.Switch;
 import android.widget.TextView;
 import android.widget.Toast;
+import androidx.viewpager.widget.PagerAdapter;
+import androidx.viewpager.widget.ViewPager;
 import com.google.mlkit.vision.common.InputImage;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -55,10 +57,12 @@ public final class MainActivity extends Activity {
     private static final int IMPORT_BACKUP = 12;
     private static final int EXPORT_EXCEL = 13;
     private static final int IMPORT_EXCEL = 14;
+    private static final String[] HOME_TAB_LABELS = {"总览", "待核对", "全部账目", "设置"};
     private final ExecutorService fileExecutor = Executors.newSingleThreadExecutor();
     private LedgerDatabase database;
     private LinearLayout body;
     private LinearLayout pageRoot;
+    private LinearLayout homeToolbar;
     private ScrollView pageScroll;
     private SourceTextPanel sourcePanel;
     private EditText sourceTarget;
@@ -74,6 +78,9 @@ public final class MainActivity extends Activity {
     private EditText noteField;
     private Spinner categoryField;
     private final List<String> categoryOptions = new ArrayList<>();
+    private final List<Button> homeTabButtons = new ArrayList<>();
+    private final List<Switch> recognitionSwitches = new ArrayList<>();
+    private ViewPager homePager;
     private LedgerFilter ledgerFilter = new LedgerFilter("", null, "");
 
     @Override
@@ -134,6 +141,9 @@ public final class MainActivity extends Activity {
     }
 
     private void resetPage(String title) {
+        homePager = null;
+        homeTabButtons.clear();
+        recognitionSwitches.clear();
         sourcePanel = null;
         sourceTarget = null;
         gestureTarget = null;
@@ -148,6 +158,7 @@ public final class MainActivity extends Activity {
             return insets;
         });
         LinearLayout toolbar = BlueUi.row(this);
+        homeToolbar = toolbar;
         toolbar.setPadding(dp(20), dp(12), dp(16), dp(10));
         if (editing != null) {
             Button back = BlueUi.button(this, "返回", false, () -> {
@@ -183,13 +194,16 @@ public final class MainActivity extends Activity {
     private void addTabs(LinearLayout root) {
         LinearLayout tabs = BlueUi.row(this);
         tabs.setPadding(dp(12), 0, dp(12), dp(10));
-        String[] labels = {"总览", "待核对", "全部账目", "设置"};
+        String[] labels = HOME_TAB_LABELS;
         for (int index = 0; index < labels.length; index++) {
             final int selectedTab = index;
             Button tab = BlueUi.button(this, labels[index], activeTab == index, () -> {
-                activeTab = selectedTab;
-                showHome();
+                if (homePager != null) {
+                    homePager.setCurrentItem(selectedTab, true);
+                }
             });
+            homeTabButtons.add(tab);
+            tab.setSelected(activeTab == index);
             tab.setTextSize(13);
             tab.setPadding(dp(5), dp(8), dp(5), dp(8));
             LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(0, dp(44), 1f);
@@ -203,28 +217,116 @@ public final class MainActivity extends Activity {
         editing = null;
         resetPage("Ellery Ledger");
         List<LedgerEntry> entries = database.list();
-        if (activeTab == 3) {
+        List<ScrollView> pages = new ArrayList<>();
+        pageRoot.removeView(pageScroll);
+        for (int index = 0; index < HOME_TAB_LABELS.length; index++) {
+            ScrollView scroll = new ScrollView(this);
+            scroll.setFillViewport(true);
+            scroll.setClipToPadding(false);
+            scroll.setVerticalScrollBarEnabled(false);
+            scroll.setContentDescription(HOME_TAB_LABELS[index]);
+            body = BlueUi.column(this);
+            body.setPadding(dp(16), dp(8), dp(16), dp(28));
+            scroll.addView(body);
+            pages.add(scroll);
+            renderHomePage(index, entries);
+            PageTheme theme = PageTheme.forTab(index);
+            theme.apply(body);
+            scroll.setBackgroundColor(theme.backgroundColor);
+        }
+        homePager = new ViewPager(this);
+        homePager.setId(View.generateViewId());
+        // 保留页面实例，使纵向滚动、筛选输入和标签滚动状态不随切页重置。
+        homePager.setOffscreenPageLimit(HOME_TAB_LABELS.length - 1);
+        homePager.setAdapter(new PagerAdapter() {
+            @Override
+            public int getCount() {
+                return pages.size();
+            }
+
+            @Override
+            public boolean isViewFromObject(View view, Object object) {
+                return view == object;
+            }
+
+            @Override
+            public Object instantiateItem(ViewGroup container, int position) {
+                ScrollView page = pages.get(position);
+                container.addView(page);
+                return page;
+            }
+
+            @Override
+            public void destroyItem(ViewGroup container, int position, Object object) {
+                container.removeView((View) object);
+            }
+
+            @Override
+            public CharSequence getPageTitle(int position) {
+                return HOME_TAB_LABELS[position];
+            }
+        });
+        ViewPager currentPager = homePager;
+        homePager.addOnPageChangeListener(new ViewPager.SimpleOnPageChangeListener() {
+            @Override
+            public void onPageSelected(int position) {
+                if (editing != null || homePager != currentPager) {
+                    return;
+                }
+                activeTab = position;
+                pageScroll = pages.get(position);
+                body = (LinearLayout) pageScroll.getChildAt(0);
+                updateHomeTabs();
+                InputMethodManager inputMethod = getSystemService(InputMethodManager.class);
+                if (inputMethod != null) {
+                    inputMethod.hideSoftInputFromWindow(homePager.getWindowToken(), 0);
+                }
+            }
+        });
+        pageRoot.addView(homePager, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+        activeTab = Math.max(0, Math.min(activeTab, HOME_TAB_LABELS.length - 1));
+        homePager.setCurrentItem(activeTab, false);
+        pageScroll = pages.get(activeTab);
+        body = (LinearLayout) pageScroll.getChildAt(0);
+        updateHomeTabs();
+    }
+
+    private void updateHomeTabs() {
+        PageTheme currentTheme = PageTheme.forTab(activeTab);
+        pageRoot.setBackgroundColor(currentTheme.backgroundColor);
+        currentTheme.apply(homeToolbar);
+        for (int index = 0; index < homeTabButtons.size(); index++) {
+            Button tab = homeTabButtons.get(index);
+            boolean selected = index == activeTab;
+            tab.setSelected(selected);
+            PageTheme.forTab(index).styleButton(tab, selected);
+        }
+    }
+
+    private void renderHomePage(int tabIndex, List<LedgerEntry> entries) {
+        if (tabIndex == 3) {
             showSettings();
             return;
         }
-        if (activeTab == 2) {
+        if (tabIndex == 2) {
             text("全部账目", 20);
             body.addView(new LedgerBrowserView(this, entries, ledgerFilter, this::addEntryCard,
                     filter -> ledgerFilter = filter), BlueUi.below(this, 0));
             return;
         }
-        if (activeTab == 0) {
+        if (tabIndex == 0) {
             showOverview(entries);
         } else {
-            text(activeTab == 1 ? "待核对账目" : "全部账目", 20);
-            text(activeTab == 1 ? "补充商品和评价，确认后入账" : "点开一笔账目，查看或编辑记录", 14);
+            text(tabIndex == 1 ? "待核对账目" : "全部账目", 20);
+            text(tabIndex == 1 ? "补充商品和评价，确认后入账" : "点开一笔账目，查看或编辑记录", 14);
         }
         int displayed = 0;
         for (LedgerEntry entry : entries) {
-            if (activeTab == 1 && !LedgerEntry.DRAFT.equals(entry.getStatus())) {
+            if (tabIndex == 1 && !LedgerEntry.DRAFT.equals(entry.getStatus())) {
                 continue;
             }
-            if (activeTab == 0 && displayed >= 5) {
+            if (tabIndex == 0 && displayed >= 5) {
                 break;
             }
             addEntryCard(entry);
@@ -232,7 +334,7 @@ public final class MainActivity extends Activity {
         }
         if (displayed == 0) {
             LinearLayout empty = BlueUi.card(this);
-            BlueUi.appendText(empty, activeTab == 1 ? "暂时没有待核对账目" : "从第一笔开始", 18, BlueUi.DEEP_BLUE, true, 0);
+            BlueUi.appendText(empty, tabIndex == 1 ? "暂时没有待核对账目" : "从第一笔开始", 18, BlueUi.DEEP_BLUE, true, 0);
             BlueUi.appendText(empty, "选一张支付截图，或手工记一笔。识别结果会先保存在待核对列表。", 14, BlueUi.SUB, false, 10);
             body.addView(empty, BlueUi.below(this, 12));
         }
@@ -288,7 +390,15 @@ public final class MainActivity extends Activity {
         amountOnlySwitch.setTrackTintList(new ColorStateList(
                 new int[][]{new int[]{android.R.attr.state_checked}, new int[]{}},
                 new int[]{BlueUi.BLUE, BlueUi.BORDER}));
-        amountOnlySwitch.setOnCheckedChangeListener((view, enabled) -> RecognitionPreferences.setAmountOnly(this, enabled));
+        recognitionSwitches.add(amountOnlySwitch);
+        amountOnlySwitch.setOnCheckedChangeListener((view, enabled) -> {
+            RecognitionPreferences.setAmountOnly(this, enabled);
+            for (Switch modeSwitch : recognitionSwitches) {
+                if (modeSwitch.isChecked() != enabled) {
+                    modeSwitch.setChecked(enabled);
+                }
+            }
+        });
         mode.addView(amountOnlySwitch);
         BlueUi.appendText(mode, "关闭时同时尝试识别店铺、商品和日期。评价由你填写。", 13, BlueUi.SUB, false, 4);
         body.addView(mode, BlueUi.below(this, 16));
@@ -309,8 +419,7 @@ public final class MainActivity extends Activity {
         LinearLayout.LayoutParams categoryParams = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         categoryParams.setMarginStart(dp(6));
-        tags.addView(BlueUi.tag(this, category, BlueUi.CATEGORY_TAG_BACKGROUND,
-                BlueUi.CATEGORY_TAG_TEXT), categoryParams);
+        tags.addView(BlueUi.categoryTag(this, entry.getCategory()), categoryParams);
         // 空间不足时整行标签可水平浏览，避免挤压右侧金额。
         android.widget.HorizontalScrollView tagScroll = new android.widget.HorizontalScrollView(this);
         tagScroll.setHorizontalScrollBarEnabled(false);

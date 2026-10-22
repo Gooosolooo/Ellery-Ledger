@@ -25,14 +25,18 @@ final class BlueUi {
     static final int DANGER = 0xFF9B555D;
     static final int DATE_TAG_BACKGROUND = 0xFFE2E9ED;
     static final int DATE_TAG_TEXT = 0xFF4D6371;
-    static final int CATEGORY_TAG_BACKGROUND = 0xFFE9E3EB;
-    static final int CATEGORY_TAG_TEXT = 0xFF69586F;
     static final int DRAFT_TAG_BACKGROUND = 0xFFF0E5D9;
     static final int DRAFT_TAG_TEXT = 0xFF79624D;
     static final int CARD_RADIUS_DP = 18;
     static final int BUTTON_HEIGHT_DP = 48;
 
+    private static final Object FIXED_TAG_COLORS = new Object();
+
     private BlueUi() { }
+
+    static boolean hasFixedTagColors(View view) {
+        return view.getTag() == FIXED_TAG_COLORS;
+    }
 
     static int dp(Context context, int value) {
         return Math.round(value * context.getResources().getDisplayMetrics().density);
@@ -61,9 +65,51 @@ final class BlueUi {
     /** 创建使用独立配色的账目标签。 */
     static TextView tag(Context context, String value, int backgroundColor, int textColor) {
         TextView view = text(context, value, 12, textColor, true);
+        view.setTag(FIXED_TAG_COLORS);
         view.setPadding(dp(context, 10), dp(context, 5), dp(context, 10), dp(context, 5));
         view.setBackground(round(context, backgroundColor, 10));
         return view;
+    }
+
+    /** 按类别名称使用固定配色，未知类别使用中性灰。 */
+    static TextView categoryTag(Context context, String category) {
+        CategoryPalette palette;
+        switch (category == null ? "" : category) {
+            case "餐饮": palette = CategoryPalette.DINING; break;
+            case "享受": palette = CategoryPalette.LEISURE; break;
+            case "交通": palette = CategoryPalette.TRANSPORT; break;
+            case "提升": palette = CategoryPalette.LEARNING; break;
+            case "日用": palette = CategoryPalette.DAILY; break;
+            case "社交": palette = CategoryPalette.SOCIAL; break;
+            case "穿搭": palette = CategoryPalette.CLOTHING; break;
+            case "咪用": palette = CategoryPalette.PET; break;
+            case "大额": palette = CategoryPalette.LARGE_EXPENSE; break;
+            default: palette = CategoryPalette.NEUTRAL; break;
+        }
+        String label = category == null || category.isEmpty() ? "类别待选择" : category;
+        return tag(context, label, palette.backgroundColor, palette.textColor);
+    }
+
+    /** 莫兰迪浅底与深色文字配对，避免依赖类别排序。 */
+    private enum CategoryPalette {
+        DINING(0xFFF0E1D7, 0xFF795642),
+        LEISURE(0xFFE9E3EB, 0xFF69586F),
+        TRANSPORT(0xFFE0E8EF, 0xFF4D637B),
+        LEARNING(0xFFE3E9DC, 0xFF536747),
+        DAILY(0xFFECE7DC, 0xFF6D634E),
+        SOCIAL(0xFFF0E0E4, 0xFF805965),
+        CLOTHING(0xFFEADFE7, 0xFF76566E),
+        PET(0xFFDEEBE8, 0xFF456D65),
+        LARGE_EXPENSE(0xFFEEDDD9, 0xFF82534C),
+        NEUTRAL(0xFFE6E6E4, 0xFF60615C);
+
+        private final int backgroundColor;
+        private final int textColor;
+
+        CategoryPalette(int backgroundColor, int textColor) {
+            this.backgroundColor = backgroundColor;
+            this.textColor = textColor;
+        }
     }
 
     static LinearLayout column(Context context) {

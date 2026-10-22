@@ -48,3 +48,10 @@ Start with the in-app image picker or image share flow to test OCR without enabl
 - A missing service shows a Quick Settings dialog; only the user's explicit choice opens system accessibility settings. No silent redirect to MainActivity.
 - Added the official requestAddTileService entry in app settings and accurate already-added / not-added feedback.
 - This correction has not been installed or verified on the user's Android 16 phone. Previous OCR tests do not establish Quick Settings behavior. No APK is generated for this source-only change.
+
+## Home tab swipe navigation (source-only)
+
+- Added four persistent ViewPager pages in overview, drafts, all entries and settings order. Tab clicks and swipes share the selected state; page ends do not wrap.
+- Each page retains its vertical scroll position during tab changes; all-entry filter controls retain their input. Overview and settings recognition switches stay synchronized.
+- The entry editor remains outside the pager.
+- Device checks pending: slow drag and snap-back; fast fling; first/last boundaries; vertical scrolling and card taps; horizontal tag scrolling; search selection and keyboard; draft editor isolation; filter retention and recognition switch synchronization.
