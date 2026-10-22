@@ -444,7 +444,7 @@ public final class MainActivity extends Activity {
         if (shop.isEmpty()) {
             title = product.isEmpty() ? "店铺／商品待补充" : product;
         } else {
-            title = product.isEmpty() ? shop : shop + "｜" + product;
+            title = product.isEmpty() ? shop : shop + ": " + product;
         }
         BlueUi.appendText(card, title, 17, BlueUi.INK, true, 12);
         if (!entry.getNote().trim().isEmpty()) {
@@ -487,7 +487,36 @@ public final class MainActivity extends Activity {
         button("导入 Excel 明细", () -> pick("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", IMPORT_EXCEL));
         button("导出 Excel 明细", () -> create("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 "ellery-ledger-" + LocalDate.now() + ".xlsx", EXPORT_EXCEL));
+        text("数据管理", 20);
+        button("清空已确认账单", this::showClearConfirmedDialog);
         text("Ellery Ledger · 本地识别版", 13);
+    }
+
+    private void showClearConfirmedDialog() {
+        long count = database.countConfirmed();
+        if (count == 0) {
+            message("没有可清空的已确认账单，待核对草稿已保留");
+            return;
+        }
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setTitle("清空已确认账单？")
+                .setMessage("将删除全部 " + count + " 笔已确认账单，删除后无法撤销，建议先导出备份。\n\n"
+                        + "待核对草稿、App 设置和已导出的备份文件都会保留。")
+                .setNegativeButton("取消", null)
+                .setPositiveButton("确认清空", (view, which) -> {
+                    try {
+                        int deleted = database.clearConfirmed();
+                        showHome();
+                        message("已清空 " + deleted + " 笔已确认账单，待核对草稿已保留");
+                    } catch (android.database.SQLException exception) {
+                        message("清空失败，请稍后重试");
+                    }
+                }).create();
+        dialog.setOnShowListener(view -> {
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setTextColor(BlueUi.DANGER);
+            dialog.getButton(AlertDialog.BUTTON_NEGATIVE).requestFocus();
+        });
+        dialog.show();
     }
 
     private void requestQuickSettingsTile() {
@@ -921,7 +950,7 @@ public final class MainActivity extends Activity {
 
     private void button(String label, Runnable action) {
         Button button = BlueUi.button(this, label, "确认并保存账目".equals(label), action);
-        if (label.contains("删除") || label.contains("丢弃")) {
+        if (label.contains("删除") || label.contains("丢弃") || label.contains("清空")) {
             button.setTextColor(BlueUi.DANGER);
         }
         body.addView(button, BlueUi.below(this, 12));

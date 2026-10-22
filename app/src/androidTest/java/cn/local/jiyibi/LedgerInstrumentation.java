@@ -77,6 +77,7 @@ public final class LedgerInstrumentation extends Instrumentation {
                 database.delete(draft.getId());
             }
             getTargetContext().deleteDatabase("instrumentation-ledger.db");
+            verifyClearConfirmed();
             verifyOfflineOcr();
             result.putString("stream", "PASS: Excel round-trip, JSON backup, draft confirmation, idempotent restore and offline Chinese OCR\n");
             finish(ActivityResult.SUCCESS, result);
@@ -89,6 +90,41 @@ public final class LedgerInstrumentation extends Instrumentation {
     private static void equal(String expected, String actual) {
         if (!expected.equals(actual)) {
             throw new AssertionError("往返数据不一致");
+        }
+    }
+
+    private void verifyClearConfirmed() throws Exception {
+        String databaseName = "clear-confirmed-" + java.util.UUID.randomUUID() + ".db";
+        try (LedgerDatabase database = new LedgerDatabase(getTargetContext(), databaseName)) {
+            if (database.countConfirmed() != 0 || database.clearConfirmed() != 0) {
+                throw new AssertionError("空数据库清空应为零条");
+            }
+            LedgerEntry pending = ReceiptParser.parse("商户名称：保留店铺\n商品：保留商品\n实付金额：28.00");
+            pending.setNote("保留用户评价和换行\n第二行");
+            database.save(pending);
+            byte[] before = BackupCodec.encode(database.list());
+            for (int index = 0; index < 2; index++) {
+                LedgerEntry confirmed = new LedgerEntry();
+                confirmed.setAmount("31.71");
+                confirmed.setStatus(LedgerEntry.CONFIRMED);
+                database.save(confirmed);
+            }
+            if (database.countConfirmed() != 2 || database.clearConfirmed() != 2
+                    || database.countConfirmed() != 0) {
+                throw new AssertionError("应只删除全部已确认账单");
+            }
+            if (!java.util.Arrays.equals(before, BackupCodec.encode(database.list()))) {
+                throw new AssertionError("待核对草稿的标识、字段与原文必须完整保留");
+            }
+            if (database.clearConfirmed() != 0 || database.list().size() != 1) {
+                throw new AssertionError("重复清空不能删除草稿");
+            }
+            database.save(new LedgerEntry());
+            if (database.clearConfirmed() != 0 || database.list().size() != 2) {
+                throw new AssertionError("新生成的待核对草稿也必须保留");
+            }
+        } finally {
+            getTargetContext().deleteDatabase(databaseName);
         }
     }
 

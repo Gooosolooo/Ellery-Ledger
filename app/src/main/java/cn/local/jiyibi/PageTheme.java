@@ -61,7 +61,11 @@ enum PageTheme {
         }
         if (view instanceof Button && !(view instanceof Switch)) {
             Button button = (Button) view;
-            styleButton(button, button.getCurrentTextColor() == Color.WHITE);
+            int textColor = button.getCurrentTextColor();
+            styleButton(button, textColor == Color.WHITE);
+            if (textColor == BlueUi.DANGER) {
+                button.setTextColor(BlueUi.DANGER);
+            }
         } else {
             if (view instanceof TextView) {
                 TextView text = (TextView) view;

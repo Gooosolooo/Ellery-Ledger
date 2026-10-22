@@ -13,6 +13,7 @@ import java.util.List;
 public final class LedgerDatabase extends SQLiteOpenHelper {
     private static final String TABLE = "ledger_entry";
     private static final int DATABASE_VERSION = 1;
+    private static final String CONFIRMED_SELECTION = "status = ?";
 
     public LedgerDatabase(Context context) {
         this(context, "ledger.db");
@@ -93,6 +94,17 @@ public final class LedgerDatabase extends SQLiteOpenHelper {
             }
         }
         return null;
+    }
+
+    public long countConfirmed() {
+        return android.database.DatabaseUtils.queryNumEntries(getReadableDatabase(), TABLE,
+                CONFIRMED_SELECTION, new String[]{LedgerEntry.CONFIRMED});
+    }
+
+    /** 单条 SQL 原子删除已确认账目，任何待核对草稿都不在删除范围内。 */
+    public int clearConfirmed() {
+        return getWritableDatabase().delete(TABLE, CONFIRMED_SELECTION,
+                new String[]{LedgerEntry.CONFIRMED});
     }
 
     public void delete(String id) {
