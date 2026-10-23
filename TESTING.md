@@ -2,10 +2,12 @@
 
 ## Ledger filters (2026-10-23, source only)
 
-- Added 38 synthetic-data checks for day/month filtering, combined category/keyword matching, custom/empty categories, literal search punctuation, English case folding, stable date ordering, nonmutation of source records, empty results and reset criteria.
-- Covered exact decimal totals, invalid/missing draft amounts excluded from spending, leap days and malformed draft dates excluded from date-specific results.
-- Core suite: 89 business checks, 14 source-selection checks and 38 ledger-filter checks passed.
-- Java source compilation and Android Lint passed. No APK was generated or installed for this change.
+- Updated 42 synthetic-data checks for confirmed-only lists, day/month filtering, combined category/keyword matching, custom/empty categories, literal search punctuation, English case folding, stable date ordering, nonmutation of source records, empty results and reset criteria.
+- Covered exact decimal totals, drafts excluded from lists/search/counts/totals (including empty or invalid amounts), leap days and the transition from pending to explicitly confirmed.
+- Added 43 recognition-draft checks for empty results, OCR failure details, blank user notes, stable/fresh record identifiers and current-attempt accessible-text fallback when screenshot parsing omits fields.
+- Core suite: 89 business checks, 14 source-selection checks, 42 ledger-filter checks and 43 recognition-draft checks passed (188 total).
+- Application and Android test Java source compilation and Android Lint passed. No APK was generated or installed for this change.
+- Device checks pending: empty-image/failed-OCR notification and saved draft; screenshot-denial fallback; page-switch/own-app cancellation; manual completion and confirmation moving a draft into the confirmed-only ledger.
 - Native wheel scrolling, dialog placement, keyboard interaction and state restoration still require emulator/device UI verification after the user builds the app in Android Studio.
 
 Verified on 2026-10-22.

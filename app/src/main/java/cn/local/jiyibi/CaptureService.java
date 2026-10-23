@@ -130,7 +130,7 @@ public final class CaptureService extends AccessibilityService {
         if (CaptureSourcePolicy.hasReceiptAmount(entry)) {
             publishCurrentDraft(entry, packageName, windowId, capturedAt, "页面文字");
         } else {
-            captureWindow(packageName, windowId, capturedAt);
+            captureWindow(packageName, windowId, capturedAt, entry);
         }
     }
 
@@ -235,12 +235,17 @@ public final class CaptureService extends AccessibilityService {
     }
 
     private void captureWindow(String packageName, int windowId, String capturedAt) {
+        captureWindow(packageName, windowId, capturedAt, new LedgerEntry());
+    }
+
+    private void captureWindow(String packageName, int windowId, String capturedAt, LedgerEntry pageEntry) {
         if (!isCurrentSource(packageName, windowId)) {
             failCapture("页面已切换，本次识别已取消，请在账单页重新点击");
             return;
         }
         if ((getServiceInfo().getCapabilities() & AccessibilityServiceInfo.CAPABILITY_CAN_TAKE_SCREENSHOT) == 0) {
-            failCapture("系统未授予截图能力，请关闭再开启 Ellery Ledger 辅助功能服务");
+            publishIncompleteDraft(pageEntry, packageName, windowId, capturedAt,
+                    "系统未授予截图能力，请手工补充或重新开启辅助功能服务后重试。");
             return;
         }
         CaptureDiagnostics.append(this, "开始截图，窗口=" + windowId);
@@ -251,7 +256,8 @@ public final class CaptureService extends AccessibilityService {
                 try (HardwareBuffer buffer = screenshot.getHardwareBuffer()) {
                     Bitmap hardwareBitmap = Bitmap.wrapHardwareBuffer(buffer, screenshot.getColorSpace());
                     if (hardwareBitmap == null) {
-                        failCapture("当前窗口无法截图，请手动填写");
+                        publishIncompleteDraft(pageEntry, packageName, windowId, capturedAt,
+                                "当前窗口无法截图，请手工补充。");
                         return;
                     }
                     try {
@@ -260,11 +266,13 @@ public final class CaptureService extends AccessibilityService {
                         hardwareBitmap.recycle();
                     }
                 } catch (RuntimeException exception) {
-                    failCapture("当前窗口无法截图，请手动填写");
+                    publishIncompleteDraft(pageEntry, packageName, windowId, capturedAt,
+                            "当前窗口无法截图，请手工补充。");
                     return;
                 }
                 if (softwareBitmap == null) {
-                    failCapture("当前窗口无法截图，请手动填写");
+                    publishIncompleteDraft(pageEntry, packageName, windowId, capturedAt,
+                            "当前窗口无法截图，请手工补充。");
                     return;
                 }
                 if (!isCurrentSource(packageName, windowId)) {
@@ -275,13 +283,16 @@ public final class CaptureService extends AccessibilityService {
                 CaptureDiagnostics.append(CaptureService.this, "截图成功 " + softwareBitmap.getWidth() + "×" + softwareBitmap.getHeight() + "，开始本地 OCR");
                 LocalOcr.recognizeCurrentPage(CaptureService.this,
                         InputImage.fromBitmap(softwareBitmap, 0),
-                        entry -> publishCurrentDraft(entry, packageName, windowId, capturedAt, "当前窗口截图"),
-                        () -> failCapture("本地识别失败，请重试或手动填写"), softwareBitmap::recycle);
+                        entry -> publishCurrentDraft(RecognitionDrafts.merge(pageEntry, entry),
+                                packageName, windowId, capturedAt, "当前窗口截图"),
+                        () -> publishIncompleteDraft(pageEntry, packageName, windowId, capturedAt,
+                                "本地识别失败，请手工补充或重新识别。"), softwareBitmap::recycle);
             }
 
             @Override
             public void onFailure(int errorCode) {
-                failCapture("当前页面不允许截图或授权已变化，请手动填写（" + errorCode + "）");
+                publishIncompleteDraft(pageEntry, packageName, windowId, capturedAt,
+                        "当前页面不允许截图或授权已变化，请手工补充（" + errorCode + "）。");
             }
         };
         try {
@@ -291,29 +302,42 @@ public final class CaptureService extends AccessibilityService {
                 takeScreenshot(Display.DEFAULT_DISPLAY, getMainExecutor(), callback);
             }
         } catch (RuntimeException exception) {
-            failCapture("无法截取当前账单，请检查服务授权或手动填写");
+            publishIncompleteDraft(pageEntry, packageName, windowId, capturedAt,
+                    "无法截取当前账单，请检查服务授权或手工补充。");
         }
     }
 
     private void publishCurrentDraft(LedgerEntry entry, String packageName, int windowId,
             String capturedAt, String method) {
+        String warning = CaptureSourcePolicy.hasReceiptAmount(entry)
+                ? "" : RecognitionDrafts.MISSING_AMOUNT_MESSAGE;
+        publishDraft(entry, packageName, windowId, capturedAt, method, warning);
+    }
+
+    private void publishIncompleteDraft(LedgerEntry entry, String packageName, int windowId,
+            String capturedAt, String warning) {
+        publishDraft(entry, packageName, windowId, capturedAt, "页面文字／截图识别未完成", warning);
+    }
+
+    private void publishDraft(LedgerEntry entry, String packageName, int windowId,
+            String capturedAt, String method, String warning) {
         if (!isCurrentSource(packageName, windowId)) {
             failCapture("页面已切换，本次识别已取消，请重新点击");
             return;
         }
         CaptureDiagnostics.append(this, method + "完成，原文字数=" + entry.getSourceText().length()
                 + "，有金额=" + !entry.getAmount().isBlank());
-        if (!CaptureSourcePolicy.hasReceiptAmount(entry)
-                || entry.getSourceText().contains("待核对") && entry.getSourceText().contains("最近账目")) {
-            failCapture("已读取页面，但未解析出可靠账单金额；详情见 App 设置中的识别诊断");
+        if (entry.getSourceText().contains("待核对") && entry.getSourceText().contains("最近账目")) {
+            failCapture("识别到本 App 页面内容，本次已取消，请切换到账单详情页重试");
             return;
         }
-        entry.setSourceText("读取方式：" + method + "\n来源应用：" + (packageName.isEmpty() ? "当前前台应用窗口" : packageName)
-                + "\n读取时间：" + capturedAt + "\n\n" + entry.getSourceText());
-        LocalOcr.persistDraft(this, entry);
+        String source = method + "；来源应用：" + (packageName.isEmpty() ? "当前前台应用窗口" : packageName);
+        LocalOcr.persistDraft(this, RecognitionDrafts.prepare(entry, source, capturedAt, warning));
         CaptureDiagnostics.append(this, "新草稿已生成，标识=" + entry.getId());
         capturing.set(false);
-        Toast.makeText(this, "本次识别金额：" + entry.getAmount() + "，已生成新的待核对草稿", Toast.LENGTH_LONG).show();
+        String message = warning.isBlank() ? "本次识别金额：" + entry.getAmount() + "，已生成新的待核对草稿"
+                : "识别信息不完整，已保存待核对草稿，请打开 App 手工补充";
+        Toast.makeText(this, message, Toast.LENGTH_LONG).show();
     }
 
     private void failCapture(String message) {

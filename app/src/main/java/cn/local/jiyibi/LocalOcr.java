@@ -25,19 +25,19 @@ public final class LocalOcr {
         TextRecognizer recognizer = TextRecognition.getClient(new ChineseTextRecognizerOptions.Builder().build());
         recognizer.process(image).addOnSuccessListener(result -> {
             LedgerEntry entry = extract(result, amountOnly);
-            entry.setSourceText("图片来源：" + source + "\n读取时间：" + readAt + "\n\n" + entry.getSourceText());
-            persistDraft(application, entry);
+            String warning = entry.getAmount().isBlank() ? RecognitionDrafts.MISSING_AMOUNT_MESSAGE : "";
+            persistDraft(application, RecognitionDrafts.prepare(entry, source, readAt, warning));
         }).addOnFailureListener(exception -> {
             LedgerEntry entry = new LedgerEntry();
-            entry.setSourceText("本地识别失败，请手工填写或重新分享截图。");
-            persistDraft(application, entry);
+            persistDraft(application, RecognitionDrafts.prepare(entry, source, readAt,
+                    "本地识别失败，请手工填写或重新分享截图。"));
         }).addOnCompleteListener(task -> {
             recognizer.close();
             release.run();
         });
     }
 
-    /** 当前页面的失败不能生成空草稿，也不能复用任何历史结果。 */
+    /** 当前页面识别结果由调用方校验来源后保存；失败时保留本次页面信息生成待核对草稿。 */
     public static void recognizeCurrentPage(Context context, InputImage image,
             java.util.function.Consumer<LedgerEntry> success, Runnable failure, Runnable release) {
         boolean amountOnly = RecognitionPreferences.isAmountOnly(context);

@@ -50,7 +50,12 @@ final class LedgerBrowserView extends LinearLayout {
     LedgerBrowserView(Context context, List<LedgerEntry> entries, LedgerFilter initialFilter,
             BiConsumer<LedgerEntry, LinearLayout> cardRenderer, Consumer<LedgerFilter> onFilterChanged) {
         super(context);
-        this.entries = entries;
+        this.entries = new ArrayList<>();
+        for (LedgerEntry entry : entries) {
+            if (LedgerEntry.CONFIRMED.equals(entry.getStatus())) {
+                this.entries.add(entry);
+            }
+        }
         this.filter = initialFilter;
         this.cardRenderer = cardRenderer;
         this.onFilterChanged = onFilterChanged;
@@ -97,7 +102,7 @@ final class LedgerBrowserView extends LinearLayout {
         counts = BlueUi.text(context, "", 13, BlueUi.SUB, false);
         counts.setAccessibilityLiveRegion(View.ACCESSIBILITY_LIVE_REGION_POLITE);
         summary.addView(counts, BlueUi.below(context, 8));
-        BlueUi.appendText(summary, "仅已确认账目计入支出，草稿不计入", 13, BlueUi.SUB, false, 8);
+        BlueUi.appendText(summary, "仅显示已确认账目，草稿请在“待核对”中查看", 13, BlueUi.SUB, false, 8);
         addView(summary, BlueUi.below(context, 14));
         BlueUi.appendText(this, "账目明细 · 按日期倒序", 14, BlueUi.SUB, false, 18);
         results = BlueUi.column(context);
@@ -173,8 +178,7 @@ final class LedgerBrowserView extends LinearLayout {
         LedgerFilter.Result result = filter.apply(entries);
         expense.setText(getContext().getString(R.string.ledger_filter_expense,
                 result.getExpense().setScale(2).toPlainString()));
-        counts.setText(getContext().getString(R.string.ledger_filter_counts, result.getEntries().size(),
-                result.getConfirmedCount(), result.getDraftCount()));
+        counts.setText(getContext().getString(R.string.ledger_filter_counts, result.getEntries().size()));
         results.removeAllViews();
         for (LedgerEntry entry : result.getEntries()) {
             cardRenderer.accept(entry, results);

@@ -9,7 +9,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 
-/** 全部账目的组合筛选；仅已确认记录计入支出，草稿金额不参与统计。 */
+/** 全部账目的组合筛选；仅已确认记录可进入列表、查询结果与支出统计。 */
 final class LedgerFilter {
     private final String datePrefix;
     private final String category;
@@ -44,9 +44,11 @@ final class LedgerFilter {
     Result apply(List<LedgerEntry> entries) {
         List<LedgerEntry> matches = new ArrayList<>();
         BigDecimal expense = BigDecimal.ZERO;
-        int confirmedCount = 0;
         String search = keyword.trim().toLowerCase(Locale.ROOT);
         for (LedgerEntry entry : entries) {
+            if (!LedgerEntry.CONFIRMED.equals(entry.getStatus())) {
+                continue;
+            }
             if (!matchesDate(entry.getDate())) {
                 continue;
             }
@@ -58,14 +60,11 @@ final class LedgerFilter {
                 continue;
             }
             matches.add(entry);
-            if (LedgerEntry.CONFIRMED.equals(entry.getStatus())) {
-                expense = expense.add(new BigDecimal(entry.getAmount()));
-                confirmedCount++;
-            }
+            expense = expense.add(new BigDecimal(entry.getAmount()));
         }
-        // 稳定排序保留同日记录的原顺序，不再将较早的草稿固定排在最前。
+        // 稳定排序保留同日记录的原顺序。
         matches.sort(Comparator.comparing(LedgerEntry::getDate).reversed());
-        return new Result(matches, expense, confirmedCount);
+        return new Result(matches, expense);
     }
 
     private static boolean contains(String text, String keyword) {
@@ -87,12 +86,10 @@ final class LedgerFilter {
     static final class Result {
         private final List<LedgerEntry> entries;
         private final BigDecimal expense;
-        private final int confirmedCount;
 
-        private Result(List<LedgerEntry> entries, BigDecimal expense, int confirmedCount) {
+        private Result(List<LedgerEntry> entries, BigDecimal expense) {
             this.entries = List.copyOf(entries);
             this.expense = expense;
-            this.confirmedCount = confirmedCount;
         }
 
         List<LedgerEntry> getEntries() {
@@ -103,12 +100,5 @@ final class LedgerFilter {
             return expense;
         }
 
-        int getConfirmedCount() {
-            return confirmedCount;
-        }
-
-        int getDraftCount() {
-            return entries.size() - confirmedCount;
-        }
     }
 }

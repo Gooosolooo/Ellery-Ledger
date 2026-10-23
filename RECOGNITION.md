@@ -10,6 +10,8 @@
 - Large monetary text can resolve smaller standalone-price candidates only when its font height is clearly dominant. Conflicting actual-payment labels remain blank.
 - Unicode minus signs and full-width decimal points are normalized. Transaction IDs, card suffixes, refund-success and unpaid pages do not become confirmed spending automatically.
 - Product names and numeric values are not invented from fuzzy labels. Notes stay blank. Every result remains a draft.
+- Empty recognition results, OCR errors and screenshot/read failures for the selected source create review drafts. The current attempt's accessible text and nonempty parsed fields are retained when screenshot recognition fails or omits them; warnings are kept in source details rather than the user's note.
+- Current-page drafts are saved only after the existing foreground-window/source checks pass. Changed pages and the app's own content still cancel without creating drafts. Confirmed-only ledger filtering excludes review drafts from its list, counts and spending total.
 
 ## Reference layouts found online
 

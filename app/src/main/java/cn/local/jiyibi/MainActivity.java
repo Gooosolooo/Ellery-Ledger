@@ -897,6 +897,7 @@ public final class MainActivity extends Activity {
 
     private void recognizeImage(Uri uri, String source) {
         activeTab = 1;
+        String readAt = java.time.LocalDateTime.now().toString();
         message("正在本地识别，完成后会产生待核对通知");
         fileExecutor.execute(() -> {
             try {
@@ -907,7 +908,14 @@ public final class MainActivity extends Activity {
                     }
                 }));
             } catch (Exception exception) {
-                runOnUiThread(() -> message("图片无法打开或读取权限已失效，请重新复制图片、选择截图或使用分享"));
+                runOnUiThread(() -> {
+                    LocalOcr.persistDraft(getApplicationContext(), RecognitionDrafts.prepare(new LedgerEntry(),
+                            source, readAt, "图片无法打开或读取权限已失效，请手工补充或重新分享截图。"));
+                    if (!isFinishing() && !isDestroyed() && editing == null) {
+                        showHome();
+                    }
+                    message("图片无法读取，已保存待核对草稿，请手工补充或重新分享截图");
+                });
             }
         });
     }

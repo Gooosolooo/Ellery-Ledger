@@ -22,38 +22,38 @@ public final class LedgerFilterTest {
         List<LedgerEntry> source = new ArrayList<>(Arrays.asList(previous, beans, coffee, subway, draft, undated, custom));
 
         LedgerFilter.Result all = select(source, "", null, "");
-        equal(7, all.getEntries().size());
-        equal(5, all.getConfirmedCount());
-        equal(2, all.getDraftCount());
+        equal(5, all.getEntries().size());
+        equal(false, all.getEntries().contains(draft));
+        equal(false, all.getEntries().contains(undated));
         amount("147.40", all);
         equal(coffee, all.getEntries().get(0));
         equal(subway, all.getEntries().get(1));
-        equal(draft, all.getEntries().get(2));
-        equal(undated, all.getEntries().get(6));
+        equal(beans, all.getEntries().get(2));
+        equal(previous, all.getEntries().get(4));
         equal(previous, source.get(0));
 
         LedgerFilter.Result month = select(source, "2026-10", null, "");
-        equal(5, month.getEntries().size());
+        equal(4, month.getEntries().size());
         amount("125.40", month);
         LedgerFilter.Result day = select(source, "2026-10-23", null, "");
-        equal(3, day.getEntries().size());
+        equal(2, day.getEntries().size());
         amount("36.10", day);
-        equal(1, day.getDraftCount());
+        equal(false, day.getEntries().contains(draft));
         LedgerFilter.Result combined = select(source, "2026-10-23", "餐饮", "甲咖啡");
-        equal(2, combined.getEntries().size());
-        equal(1, combined.getConfirmedCount());
+        equal(1, combined.getEntries().size());
+        equal(coffee, combined.getEntries().get(0));
         amount("28.10", combined);
         equal(1, select(source, "", null, "拿铁").getEntries().size());
         equal(1, select(source, "", null, "  COFFEE  ").getEntries().size());
         equal(1, select(source, "", null, "同事聚").getEntries().size());
-        equal(7, select(source, "", null, "  ").getEntries().size());
-        equal(1, select(source, "", "", "").getEntries().size());
+        equal(5, select(source, "", null, "  ").getEntries().size());
+        equal(0, select(source, "", "", "").getEntries().size());
         equal(1, select(source, "", "自定义类别", "").getEntries().size());
         equal(1, select(source, "", null, "100%_折扣'").getEntries().size());
         LedgerFilter.Result draftOnly = select(source, "", null, "草稿评价");
         amount("0", draftOnly);
-        equal(0, draftOnly.getConfirmedCount());
-        equal(1, draftOnly.getDraftCount());
+        equal(0, draftOnly.getEntries().size());
+        equal(LedgerEntry.DRAFT, draft.getStatus());
         LedgerFilter.Result empty = select(source, "2026-11", null, "");
         equal(0, empty.getEntries().size());
         amount("0", empty);
@@ -71,7 +71,13 @@ public final class LedgerFilterTest {
         equal(0, select(boundary, "2026-10-23", null, "").getEntries().size());
         equal(0, select(boundary, "2026-10", null, "").getEntries().size());
         amount("0.30", select(List.of(leap, custom), "", null, ""));
-        equal(7, select(source, "", null, "").getEntries().size());
+        equal(5, select(source, "", null, "").getEntries().size());
+        equal(0, select(List.of(draft, undated), "", null, "").getEntries().size());
+        LedgerEntry review = entry("2026-10-23", "新店", "商品", "餐饮", "12.00", "我的评价", true);
+        equal(0, select(List.of(review), "2026-10", "餐饮", "新店").getEntries().size());
+        review.setStatus(LedgerEntry.CONFIRMED);
+        equal(1, select(List.of(review), "2026-10", "餐饮", "新店").getEntries().size());
+        amount("12.00", select(List.of(review), "", null, ""));
         System.out.println("PASS: " + checks + " ledger filter checks");
     }
 
