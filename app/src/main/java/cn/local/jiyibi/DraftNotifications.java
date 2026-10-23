@@ -37,7 +37,7 @@ public final class DraftNotifications {
         String amount = entry.getAmount().isEmpty() ? "金额待补充" : "¥" + entry.getAmount();
         String content = item + " · " + amount + "\n点击核对，补充商品与评价后确认入账";
         Notification notification = new Notification.Builder(context, CHANNEL)
-                .setSmallIcon(R.drawable.ic_ledger)
+                .setSmallIcon(R.drawable.ic_ledger_scan)
                 .setContentTitle("待核对，尚未入账")
                 .setContentText(item + " · " + amount)
                 .setStyle(new Notification.BigTextStyle().bigText(content))

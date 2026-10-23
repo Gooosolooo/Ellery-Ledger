@@ -18,10 +18,11 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 import java.util.zip.ZipOutputStream;
 
-/** 只导入“1.明细”的五列数据。导出新工作簿，不改动用户原文件与查询结构。 */
+/** 兼容旧五列与新六列明细，导出独立工作簿；不改动用户原文件。 */
 public final class ExcelTransfer {
     public static final int MAX_FILE_BYTES = 20 * 1024 * 1024;
-    private static final String[] HEADERS = {"日期", "事项", "类别", "金额", "备注"};
+    private static final String[] HEADERS = {"日期", "店铺/品牌", "商品名称", "类别", "金额", "备注"};
+    private static final String[] LEGACY_HEADERS = {"日期", "事项", "类别", "金额", "备注"};
     private static final String MAIN_NS = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
 
     private ExcelTransfer() { }
@@ -109,6 +110,7 @@ public final class ExcelTransfer {
         String rowNumber = "";
         StringBuilder cell = new StringBuilder();
         boolean headerFound = false;
+        boolean splitItems = false;
         while (sheet.next() != XmlPullParser.END_DOCUMENT) {
             String name = sheet.getName();
             int event = sheet.getEventType();
@@ -129,13 +131,12 @@ public final class ExcelTransfer {
                 row.put(column, value);
             } else if (event == XmlPullParser.END_TAG && "row".equals(name)) {
                 if (!headerFound) {
-                    for (int index = 0; index < HEADERS.length; index++) {
-                        if (!HEADERS[index].equals(row.get(String.valueOf((char) ('A' + index))))) {
-                            throw new IOException("表头应为：日期、事项、类别、金额、备注");
-                        }
+                    splitItems = matchesHeaders(row, HEADERS);
+                    if (!splitItems && !matchesHeaders(row, LEGACY_HEADERS)) {
+                        throw new IOException("表头应为：日期、店铺/品牌、商品名称、类别、金额、备注；也支持旧版事项列");
                     }
                     headerFound = true;
-                } else if (!row.getOrDefault("B", "").trim().isEmpty()) {
+                } else if (!isEmptyRow(row)) {
                     LedgerEntry entry = new LedgerEntry();
                     String date = row.getOrDefault("A", "");
                     try {
@@ -144,17 +145,26 @@ public final class ExcelTransfer {
                             date = LocalDate.of(1899, 12, 30).plusDays(serial).toString();
                         }
                         entry.setDate(date);
-                        // 旧事项无法可靠拆分店铺和商品，整体保留在商品字段，不猜测。
-                        entry.setProduct(row.get("B"));
-                        entry.setCategory(row.getOrDefault("C", ""));
-                        BigDecimal importedAmount = new BigDecimal(row.getOrDefault("D", ""));
+                        if (splitItems) {
+                            entry.setShop(row.getOrDefault("B", "").trim());
+                            entry.setProduct(row.getOrDefault("C", "").trim());
+                            if (entry.getProduct().isEmpty()) {
+                                entry.setProduct(entry.getShop());
+                                entry.setShop("");
+                            }
+                        } else {
+                            // 旧事项无法可靠拆分，整体保留为商品，不猜测。
+                            entry.setProduct(row.getOrDefault("B", ""));
+                        }
+                        entry.setCategory(row.getOrDefault(splitItems ? "D" : "C", ""));
+                        BigDecimal importedAmount = new BigDecimal(row.getOrDefault(splitItems ? "E" : "D", ""));
                         BigDecimal roundedAmount = importedAmount.setScale(2, java.math.RoundingMode.HALF_UP);
                         // Excel 浮点缓存可能产生 20.100000000000001，容许极小存储误差。
                         if (importedAmount.subtract(roundedAmount).abs().compareTo(new BigDecimal("0.00000001")) > 0) {
                             throw new IllegalArgumentException("原始金额超过两位小数");
                         }
                         entry.setAmount(roundedAmount.stripTrailingZeros().toPlainString());
-                        entry.setNote(row.getOrDefault("E", ""));
+                        entry.setNote(row.getOrDefault(splitItems ? "F" : "E", ""));
                         if (!entry.validationError().isEmpty()) {
                             throw new IllegalArgumentException(entry.validationError());
                         }
@@ -173,6 +183,11 @@ public final class ExcelTransfer {
     }
 
     public static byte[] write(List<LedgerEntry> entries) throws IOException {
+        for (LedgerEntry entry : entries) {
+            if (LedgerEntry.CONFIRMED.equals(entry.getStatus()) && entry.getExportProduct().isEmpty()) {
+                throw new IOException("有已确认账单缺少商品名称，请补充后再导出（日期：" + entry.getDate() + "）");
+            }
+        }
         ByteArrayOutputStream bytes = new ByteArrayOutputStream();
         try (ZipOutputStream zip = new ZipOutputStream(bytes)) {
             put(zip, "[Content_Types].xml", "<Types xmlns=\"http://schemas.openxmlformats.org/package/2006/content-types\">"
@@ -199,20 +214,39 @@ public final class ExcelTransfer {
                     + "<xf numFmtId=\"2\" fontId=\"0\" fillId=\"0\" borderId=\"0\" xfId=\"0\" applyNumberFormat=\"1\"/></cellXfs>"
                     + "<cellStyles count=\"1\"><cellStyle name=\"Normal\" xfId=\"0\" builtinId=\"0\"/></cellStyles></styleSheet>");
             StringBuilder sheet = new StringBuilder("<worksheet xmlns=\"" + MAIN_NS + "\"><cols>"
-                    + "<col min=\"1\" max=\"1\" width=\"14\" customWidth=\"1\"/><col min=\"2\" max=\"2\" width=\"42\" customWidth=\"1\"/>"
-                    + "<col min=\"3\" max=\"4\" width=\"14\" customWidth=\"1\"/><col min=\"5\" max=\"5\" width=\"48\" customWidth=\"1\"/></cols><sheetData>");
+                    + "<col min=\"1\" max=\"1\" width=\"14\" customWidth=\"1\"/><col min=\"2\" max=\"2\" width=\"26\" customWidth=\"1\"/>"
+                    + "<col min=\"3\" max=\"3\" width=\"42\" customWidth=\"1\"/><col min=\"4\" max=\"5\" width=\"14\" customWidth=\"1\"/>"
+                    + "<col min=\"6\" max=\"6\" width=\"48\" customWidth=\"1\"/></cols><sheetData>");
             appendRow(sheet, 1, HEADERS, false);
             int row = 2;
             for (LedgerEntry entry : entries) {
                 if (LedgerEntry.CONFIRMED.equals(entry.getStatus())) {
-                    appendRow(sheet, row++, new String[]{entry.getDate(), entry.item(), entry.getCategory(),
-                            entry.getAmount(), entry.getNote()}, true);
+                    appendRow(sheet, row++, new String[]{entry.getDate(), entry.getExportShop(), entry.getExportProduct(),
+                            entry.getCategory(), entry.getAmount(), entry.getNote()}, true);
                 }
             }
-            sheet.append("</sheetData><autoFilter ref=\"A1:E").append(row - 1).append("\"/></worksheet>");
+            sheet.append("</sheetData><autoFilter ref=\"A1:F").append(row - 1).append("\"/></worksheet>");
             put(zip, "xl/worksheets/sheet1.xml", sheet.toString());
         }
         return bytes.toByteArray();
+    }
+
+    private static boolean matchesHeaders(Map<String, String> row, String[] expected) {
+        for (int index = 0; index < expected.length; index++) {
+            if (!expected[index].equals(row.get(String.valueOf((char) ('A' + index))))) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static boolean isEmptyRow(Map<String, String> row) {
+        for (String value : row.values()) {
+            if (!value.trim().isEmpty()) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private static void appendRow(StringBuilder xml, int row, String[] values, boolean numericAmount) {
@@ -222,7 +256,7 @@ public final class ExcelTransfer {
             if (numericAmount && index == 0) {
                 long serial = java.time.temporal.ChronoUnit.DAYS.between(LocalDate.of(1899, 12, 30), LocalDate.parse(values[index]));
                 xml.append(" s=\"1\"><v>").append(serial).append("</v></c>");
-            } else if (numericAmount && index == 3) {
+            } else if (numericAmount && index == 4) {
                 xml.append(" s=\"2\"><v>").append(new BigDecimal(values[index]).toPlainString()).append("</v></c>");
             } else {
                 xml.append(" t=\"inlineStr\"><is><t xml:space=\"preserve\">")

@@ -56,6 +56,8 @@ public final class LedgerInstrumentation extends Instrumentation {
             }
             LedgerEntry copy = imported.getEntries().get(0);
             equal(draft.item(), copy.item());
+            equal(draft.getShop(), copy.getShop());
+            equal(draft.getProduct(), copy.getProduct());
             equal(draft.getDate(), copy.getDate());
             equal(draft.getNote(), copy.getNote());
             if (new BigDecimal(draft.getAmount()).compareTo(new BigDecimal(copy.getAmount())) != 0) {

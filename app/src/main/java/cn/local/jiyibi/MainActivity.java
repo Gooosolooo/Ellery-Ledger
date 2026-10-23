@@ -65,6 +65,8 @@ public final class MainActivity extends Activity {
     private LinearLayout homeToolbar;
     private ScrollView pageScroll;
     private SourceTextPanel sourcePanel;
+    private boolean sourceKeyboardRequested;
+    private boolean sourceKeyboardVisible;
     private EditText sourceTarget;
     private EditText gestureTarget;
     private String sourceTargetLabel;
@@ -154,6 +156,15 @@ public final class MainActivity extends Activity {
         root.setOnApplyWindowInsetsListener((view, insets) -> {
             Insets bars = insets.getInsets(WindowInsets.Type.systemBars() | WindowInsets.Type.ime());
             view.setPadding(bars.left, bars.top, bars.right, bars.bottom);
+            boolean keyboardVisible = insets.isVisible(WindowInsets.Type.ime());
+            if (sourcePanel != null) {
+                if (sourceKeyboardVisible && !keyboardVisible) {
+                    sourceKeyboardRequested = false;
+                    setEditorSoftInputAllowed(false);
+                }
+                sourceKeyboardVisible = keyboardVisible;
+                sourcePanel.setKeyboardVisible(keyboardVisible);
+            }
             view.post(this::resizeSourcePanel);
             return insets;
         });
@@ -594,14 +605,7 @@ public final class MainActivity extends Activity {
                 message(error);
                 return;
             }
-            if (entry.getShop().isEmpty() || entry.getProduct().isEmpty()) {
-                new AlertDialog.Builder(this).setTitle("事项信息还不完整")
-                        .setMessage("当前事项：" + entry.item() + "\n仍缺少店铺／品牌或商品名称。要按现有内容保存吗？")
-                        .setPositiveButton("按现有内容入账", (dialog, which) -> confirmEditing())
-                        .setNegativeButton("继续补充", null).show();
-            } else {
-                confirmEditing();
-            }
+            confirmEditing();
         });
         button(LedgerEntry.DRAFT.equals(entry.getStatus()) ? "保存草稿并返回" : "返回（不保存修改）", () -> {
             persistEditing();
@@ -621,6 +625,9 @@ public final class MainActivity extends Activity {
         if (sourcePanel != null) {
             return;
         }
+        sourceKeyboardRequested = false;
+        sourceKeyboardVisible = false;
+        setEditorSoftInputAllowed(false);
         InputMethodManager inputMethod = getSystemService(InputMethodManager.class);
         if (inputMethod != null) {
             inputMethod.hideSoftInputFromWindow(pageRoot.getWindowToken(), 0);
@@ -637,7 +644,7 @@ public final class MainActivity extends Activity {
             public void onSelectionFinished(String selected) {
                 insertSelectedSource(selected);
             }
-        }, this::closeSourcePanel);
+        }, this::closeSourcePanel, this::toggleSourceKeyboard);
         pageRoot.addView(sourcePanel, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(300)));
         if (sourceTarget != null) {
             sourcePanel.setTargetHint("当前填入：" + sourceTargetLabel + " · 按住原文拖选，松手插入光标处");
@@ -675,12 +682,56 @@ public final class MainActivity extends Activity {
             pageRoot.removeView(sourcePanel);
             sourcePanel = null;
             gestureTarget = null;
+            sourceKeyboardRequested = false;
+            sourceKeyboardVisible = false;
+            setEditorSoftInputAllowed(true);
         }
+    }
+
+    private void setEditorSoftInputAllowed(boolean allowed) {
+        EditText[] fields = {dateField, shopField, productField, amountField, noteField};
+        for (EditText input : fields) {
+            if (input != null) {
+                input.setShowSoftInputOnFocus(allowed);
+            }
+        }
+    }
+
+    private void toggleSourceKeyboard() {
+        if (sourcePanel == null) {
+            return;
+        }
+        InputMethodManager inputMethod = getSystemService(InputMethodManager.class);
+        if (inputMethod == null) {
+            return;
+        }
+        if (sourceKeyboardVisible || sourceKeyboardRequested) {
+            sourceKeyboardRequested = false;
+            setEditorSoftInputAllowed(false);
+            inputMethod.hideSoftInputFromWindow(pageRoot.getWindowToken(), 0);
+            return;
+        }
+        EditText target = sourceTarget;
+        if (target == null || !target.isAttachedToWindow()) {
+            message("请先点击要手动输入的字段");
+            return;
+        }
+        sourceKeyboardRequested = true;
+        setEditorSoftInputAllowed(true);
+        target.requestFocus();
+        target.post(() -> {
+            if (sourcePanel != null && sourceKeyboardRequested && target.isAttachedToWindow()) {
+                inputMethod.showSoftInput(target, InputMethodManager.SHOW_IMPLICIT);
+            }
+        });
     }
 
     private void selectSourceTarget(EditText input, String label) {
         sourceTarget = input;
         sourceTargetLabel = label;
+        if (sourcePanel != null && !sourceKeyboardRequested) {
+            input.setShowSoftInputOnFocus(false);
+        }
         if (sourcePanel != null) {
             sourcePanel.setTargetHint("当前填入：" + label + " · 按住原文拖选，松手插入光标处");
         }
@@ -817,7 +868,7 @@ public final class MainActivity extends Activity {
                     } else if (request == IMPORT_EXCEL) {
                         ExcelTransfer.ImportResult parsed = ExcelTransfer.read(bytes);
                         runOnUiThread(() -> previewImport(parsed.getEntries(),
-                                "仅导入明细，旧事项原样保留。无效或缺失金额、日期等的行已跳过："
+                                "支持新六列及旧五列明细；旧事项保留为商品名称。无效或缺失金额、日期等的行已跳过："
                                         + (parsed.getSkippedRows().isEmpty() ? "无" : parsed.getSkippedRows().toString())));
                     }
                 }

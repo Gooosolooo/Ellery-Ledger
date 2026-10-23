@@ -24,6 +24,15 @@ public final class LedgerEntry {
         return (shop.trim() + " " + product.trim()).trim();
     }
 
+    /** 导出时仅有一项内容则整体放入商品列，不改动原始账目。 */
+    public String getExportShop() {
+        return product.trim().isEmpty() ? "" : shop.trim();
+    }
+
+    public String getExportProduct() {
+        return product.trim().isEmpty() ? shop.trim() : product.trim();
+    }
+
     /** 金额保存为十进制文本，计算时使用 BigDecimal，避免二进制浮点误差。 */
     public String validationError() {
         try {
@@ -32,7 +41,7 @@ public final class LedgerEntry {
             return "请填写有效日期，例如 2026-10-22";
         }
         if (item().isEmpty()) {
-            return "请补充店铺／品牌或商品名称";
+            return "请补充商品名称";
         }
         if (category.trim().isEmpty()) {
             return "请选择类别";
