@@ -26,13 +26,13 @@ public final class ReceiptParserTest {
         equal("28", ReceiptParser.parse("支付成功\n￥28\n微信支付").getAmount());
         equal("", ReceiptParser.parse("原价\n100.00\n优惠\n20.00").getAmount());
         equal("", ReceiptParser.parse("支付成功\n+18.90").getAmount());
-        LedgerEntry amountOnly = ReceiptParser.parse("商户名称：甲店\n商品名称：甲商品\n实付金额：18.90\n2026-10-22", true);
-        equal("18.9", amountOnly.getAmount());
-        equal("", amountOnly.getShop());
-        equal("", amountOnly.getProduct());
-        equal("", amountOnly.getDate());
-        equal("", amountOnly.getNote());
-        equal(LedgerEntry.DRAFT, amountOnly.getStatus());
+        LedgerEntry complete = ReceiptParser.parse("商户名称：甲店\n商品名称：甲商品\n实付金额：18.90\n2026-10-22");
+        equal("18.9", complete.getAmount());
+        equal("甲店", complete.getShop());
+        equal("甲商品", complete.getProduct());
+        equal("2026-10-22", complete.getDate());
+        equal("", complete.getNote());
+        equal(LedgerEntry.DRAFT, complete.getStatus());
         receipt.setCategory("餐饮");
         equal("", receipt.validationError());
         receipt.setAmount("0");
@@ -52,7 +52,7 @@ public final class ReceiptParserTest {
         equal("", ReceiptParser.parse("支付成功\n一31.71件").getAmount());
         equal("", ReceiptParser.parse("支付成功\n一31.71\n一58.20").getAmount());
         equal("", ReceiptParser.parse("退款成功\n一31.71").getAmount());
-        equal("31.71", ReceiptParser.parse("支付成功\n一31.71", true).getAmount());
+        equal("31.71", ReceiptParser.parse("支付成功\n一31.71").getAmount());
         verifyFreshPageResults();
         System.out.println("PASS: " + checks + " business checks");
     }
@@ -69,7 +69,7 @@ public final class ReceiptParserTest {
         for (String amount : new String[]{"192.5", "18.9", "52.3", "99"}) {
             LedgerEntry current = ReceiptLayoutParser.parse(java.util.List.of(
                     new ReceiptLine("支付成功", 0, 0, 300, 40),
-                    new ReceiptLine("-" + new java.math.BigDecimal(amount).setScale(2).toPlainString(), 40, 100, 300, 180)), false);
+                    new ReceiptLine("-" + new java.math.BigDecimal(amount).setScale(2).toPlainString(), 40, 100, 300, 180)));
             equal(amount, current.getAmount());
             equal("true", String.valueOf(CaptureSourcePolicy.hasReceiptAmount(current)));
             if (previous != null) {
@@ -77,7 +77,7 @@ public final class ReceiptParserTest {
             }
             previous = current;
         }
-        LedgerEntry empty = ReceiptLayoutParser.parse(java.util.List.of(), false);
+        LedgerEntry empty = ReceiptLayoutParser.parse(java.util.List.of());
         equal("", empty.getAmount());
         equal("false", String.valueOf(CaptureSourcePolicy.hasReceiptAmount(empty)));
         equal("99", previous.getAmount());
@@ -120,7 +120,7 @@ public final class ReceiptParserTest {
                 new ReceiptLine("2026年10月22日 15:46:15", 310, 925, 760, 960),
                 new ReceiptLine("雪肌精乳液 盈润型 140ml", 310, 1000, 900, 1035),
                 new ReceiptLine("中免（海南）数字科技有限公司", 310, 1075, 900, 1110));
-        LedgerEntry spatial = ReceiptLayoutParser.parse(columns, false);
+        LedgerEntry spatial = ReceiptLayoutParser.parse(columns);
         equal("cdf中免", spatial.getShop());
         equal("192.5", spatial.getAmount());
         equal("雪肌精乳液 盈润型 140ml", spatial.getProduct());
@@ -130,10 +130,7 @@ public final class ReceiptParserTest {
         equal("26", ReceiptParser.parse("实付款￥26.00").getAmount());
         equal("260", ReceiptParser.parse("实付金颜 ￥260.00").getAmount());
         equal("家用压蒜器 白色款", ReceiptParser.parse("测试家居旗舰店\n家用压蒜器 白色款 ￥29.00\n×1\n实付款 ￥26.00").getProduct());
-        LedgerEntry onlyAmount = ReceiptLayoutParser.parse(columns, true);
-        equal("192.5", onlyAmount.getAmount());
-        equal("", onlyAmount.getProduct());
-        equal("", onlyAmount.getShop());
+        equal(LedgerEntry.DRAFT, spatial.getStatus());
     }
 
     private static void equal(String expected, String actual) {

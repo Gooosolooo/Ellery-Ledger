@@ -44,6 +44,8 @@ final class LedgerBrowserView extends LinearLayout {
     private final TextView expense;
     private final TextView counts;
     private final Button dateButton;
+    private final Button dateSortButton;
+    private final Button priceSortButton;
     private LedgerFilter filter;
     private boolean updatingControls;
 
@@ -78,12 +80,19 @@ final class LedgerBrowserView extends LinearLayout {
         LinearLayout dates = BlueUi.row(context);
         dateButton = BlueUi.button(context, dateLabel(filter.getDatePrefix()), false, this::showDatePicker);
         dates.addView(dateButton, new LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        dateSortButton = BlueUi.button(context, "", false, () -> update(filter.toggleDateSort()));
+        dateSortButton.setTextSize(13);
+        LayoutParams dateSortParams = new LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT);
+        dateSortParams.setMarginStart(dp(8));
+        dates.addView(dateSortButton, dateSortParams);
+        addView(dates, BlueUi.below(context, 10));
+
+        LinearLayout categoryRow = BlueUi.row(context);
         Button reset = BlueUi.button(context, "重置", false, () -> { });
         LayoutParams resetParams = new LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT);
         resetParams.setMarginStart(dp(8));
-        dates.addView(reset, resetParams);
-        addView(dates, BlueUi.below(context, 10));
 
         Spinner category = new Spinner(context);
         List<String> labels = categoryLabels();
@@ -92,7 +101,9 @@ final class LedgerBrowserView extends LinearLayout {
         category.setMinimumHeight(dp(48));
         category.setBackground(BlueUi.round(context, BlueUi.PALE_BLUE, 12));
         category.setSelection(categoryIndex(filter.getCategory()));
-        addView(category, BlueUi.below(context, 10));
+        categoryRow.addView(category, new LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        categoryRow.addView(reset, resetParams);
+        addView(categoryRow, BlueUi.below(context, 10));
 
         LinearLayout summary = BlueUi.card(context);
         BlueUi.appendText(summary, "筛选结果 · 支出总额", 13, BlueUi.SUB, false, 0);
@@ -104,7 +115,13 @@ final class LedgerBrowserView extends LinearLayout {
         summary.addView(counts, BlueUi.below(context, 8));
         BlueUi.appendText(summary, "仅显示已确认账目，草稿请在“待核对”中查看", 13, BlueUi.SUB, false, 8);
         addView(summary, BlueUi.below(context, 14));
-        BlueUi.appendText(this, "账目明细 · 按日期倒序", 14, BlueUi.SUB, false, 18);
+        LinearLayout listHeader = BlueUi.row(context);
+        listHeader.addView(BlueUi.text(context, "账目明细", 14, BlueUi.SUB, false),
+                new LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        priceSortButton = BlueUi.button(context, "", false, () -> update(filter.togglePriceSort()));
+        priceSortButton.setTextSize(13);
+        listHeader.addView(priceSortButton);
+        addView(listHeader, BlueUi.below(context, 18));
         results = BlueUi.column(context);
         addView(results, BlueUi.below(context, 0));
 
@@ -115,7 +132,7 @@ final class LedgerBrowserView extends LinearLayout {
             @Override
             public void onTextChanged(CharSequence text, int start, int before, int count) {
                 if (!updatingControls) {
-                    update(new LedgerFilter(filter.getDatePrefix(), filter.getCategory(), text.toString()));
+                    update(filter.withKeyword(text.toString()));
                 }
             }
 
@@ -127,7 +144,7 @@ final class LedgerBrowserView extends LinearLayout {
             public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
                 String selected = position == 0 ? null : categories.get(position - 1);
                 if (!updatingControls && !java.util.Objects.equals(selected, filter.getCategory())) {
-                    update(new LedgerFilter(filter.getDatePrefix(), selected, filter.getKeyword()));
+                    update(filter.withCategory(selected));
                 }
             }
 
@@ -175,6 +192,8 @@ final class LedgerBrowserView extends LinearLayout {
     }
 
     private void render() {
+        updateSortButton(dateSortButton, true);
+        updateSortButton(priceSortButton, false);
         LedgerFilter.Result result = filter.apply(entries);
         expense.setText(getContext().getString(R.string.ledger_filter_expense,
                 result.getExpense().setScale(2).toPlainString()));
@@ -190,6 +209,29 @@ final class LedgerBrowserView extends LinearLayout {
                     14, BlueUi.SUB, false, 10);
             results.addView(empty, BlueUi.below(getContext(), 12));
         }
+    }
+
+    private void updateSortButton(Button button, boolean dateSort) {
+        LedgerFilter.SortOrder order = filter.getSortOrder();
+        boolean active = order.isDateSort() == dateSort;
+        int label;
+        if (dateSort) {
+            label = !active ? R.string.ledger_sort_date
+                    : order.isAscending() ? R.string.ledger_sort_date_ascending : R.string.ledger_sort_date_descending;
+        } else {
+            label = !active ? R.string.ledger_sort_price
+                    : order.isAscending() ? R.string.ledger_sort_price_ascending : R.string.ledger_sort_price_descending;
+        }
+        button.setText(label);
+        button.setSelected(active);
+        // 浅色背景保证蓝色方向箭头与灰色未启用箭头始终可辨。
+        PageTheme.LEDGER.styleButton(button, false);
+        button.setCompoundDrawablePadding(dp(5));
+        button.setCompoundDrawablesRelativeWithIntrinsicBounds(null, null,
+                new SortArrowsDrawable(getContext(), active && order.isAscending(),
+                        active && !order.isAscending()), null);
+        button.setContentDescription(getContext().getString(active ? R.string.ledger_sort_active_description
+                : R.string.ledger_sort_inactive_description, getContext().getString(label)));
     }
 
     private void showDatePicker() {
@@ -270,7 +312,7 @@ final class LedgerBrowserView extends LinearLayout {
             } else if (selectedMode[0] == 2) {
                 prefix = LocalDate.of(year.getValue(), month.getValue(), day.getValue()).toString();
             }
-            update(new LedgerFilter(prefix, filter.getCategory(), filter.getKeyword()));
+            update(filter.withDatePrefix(prefix));
             dialog.dismiss();
         });
         LayoutParams confirmParams = new LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);

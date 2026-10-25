@@ -126,7 +126,7 @@ public final class CaptureService extends AccessibilityService {
         }
         CaptureDiagnostics.append(this, "读取到文字区域数=" + lines.size());
         String capturedAt = LocalDateTime.now().toString();
-        LedgerEntry entry = ReceiptLayoutParser.parse(lines, RecognitionPreferences.isAmountOnly(this));
+        LedgerEntry entry = ReceiptLayoutParser.parse(lines);
         if (CaptureSourcePolicy.hasReceiptAmount(entry)) {
             publishCurrentDraft(entry, packageName, windowId, capturedAt, "页面文字");
         } else {

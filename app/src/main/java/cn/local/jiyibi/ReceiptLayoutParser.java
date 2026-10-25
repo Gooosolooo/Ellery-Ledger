@@ -8,7 +8,7 @@ import java.util.List;
 public final class ReceiptLayoutParser {
     private ReceiptLayoutParser() { }
 
-    public static LedgerEntry parse(List<ReceiptLine> input, boolean amountOnly) {
+    public static LedgerEntry parse(List<ReceiptLine> input) {
         List<ReceiptLine> lines = new ArrayList<>(input);
         lines.sort(Comparator.comparingInt(ReceiptLine::getTop).thenComparingInt(ReceiptLine::getLeft));
         List<List<ReceiptLine>> rows = new ArrayList<>();
@@ -35,7 +35,7 @@ public final class ReceiptLayoutParser {
             reconstructed.append('\n');
         }
         String text = reconstructed.toString();
-        LedgerEntry entry = ReceiptParser.parse(text, amountOnly);
+        LedgerEntry entry = ReceiptParser.parse(text);
         List<ReceiptLine> amounts = new ArrayList<>();
         for (ReceiptLine line : lines) {
             if (!ReceiptParser.money(line.getText(), true).isEmpty()) { amounts.add(line); }
@@ -47,7 +47,7 @@ public final class ReceiptLayoutParser {
                 && (amounts.size() == 1 || prominent.height() >= amounts.get(1).height() * 1.5)) {
             entry.setAmount(ReceiptParser.money(prominent.getText(), true));
         }
-        if (!amountOnly && prominent != null && !entry.getAmount().isEmpty()
+        if (prominent != null && !entry.getAmount().isEmpty()
                 && entry.getAmount().equals(ReceiptParser.money(prominent.getText(), true))) {
             for (int index = lines.size() - 1; index >= 0; index--) {
                 ReceiptLine header = lines.get(index);

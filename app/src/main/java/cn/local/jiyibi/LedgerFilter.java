@@ -14,9 +14,14 @@ final class LedgerFilter {
     private final String datePrefix;
     private final String category;
     private final String keyword;
+    private final SortOrder sortOrder;
 
     /** 类别为 null 表示全部，空字符串表示尚未分类。 */
     LedgerFilter(String datePrefix, String category, String keyword) {
+        this(datePrefix, category, keyword, SortOrder.DATE_DESCENDING);
+    }
+
+    LedgerFilter(String datePrefix, String category, String keyword, SortOrder sortOrder) {
         if (!datePrefix.isEmpty()) {
             if (datePrefix.length() == 7) {
                 YearMonth.parse(datePrefix);
@@ -27,6 +32,7 @@ final class LedgerFilter {
         this.datePrefix = datePrefix;
         this.category = category;
         this.keyword = keyword;
+        this.sortOrder = sortOrder == null ? SortOrder.DATE_DESCENDING : sortOrder;
     }
 
     String getDatePrefix() {
@@ -39,6 +45,34 @@ final class LedgerFilter {
 
     String getKeyword() {
         return keyword;
+    }
+
+    SortOrder getSortOrder() {
+        return sortOrder;
+    }
+
+    LedgerFilter withDatePrefix(String value) {
+        return new LedgerFilter(value, category, keyword, sortOrder);
+    }
+
+    LedgerFilter withCategory(String value) {
+        return new LedgerFilter(datePrefix, value, keyword, sortOrder);
+    }
+
+    LedgerFilter withKeyword(String value) {
+        return new LedgerFilter(datePrefix, category, value, sortOrder);
+    }
+
+    LedgerFilter toggleDateSort() {
+        SortOrder next = sortOrder == SortOrder.DATE_ASCENDING
+                ? SortOrder.DATE_DESCENDING : SortOrder.DATE_ASCENDING;
+        return new LedgerFilter(datePrefix, category, keyword, next);
+    }
+
+    LedgerFilter togglePriceSort() {
+        SortOrder next = sortOrder == SortOrder.PRICE_ASCENDING
+                ? SortOrder.PRICE_DESCENDING : SortOrder.PRICE_ASCENDING;
+        return new LedgerFilter(datePrefix, category, keyword, next);
     }
 
     Result apply(List<LedgerEntry> entries) {
@@ -63,12 +97,55 @@ final class LedgerFilter {
             expense = expense.add(new BigDecimal(entry.getAmount()));
         }
         // 稳定排序保留同日记录的原顺序。
-        matches.sort(Comparator.comparing(LedgerEntry::getDate).reversed());
+        matches.sort(comparator());
         return new Result(matches, expense);
     }
 
     private static boolean contains(String text, String keyword) {
         return text.toLowerCase(Locale.ROOT).contains(keyword);
+    }
+
+    private Comparator<LedgerEntry> comparator() {
+        Comparator<LedgerEntry> dateOrder = Comparator.comparing(LedgerEntry::getDate);
+        Comparator<LedgerEntry> priceOrder = Comparator.comparing(entry -> new BigDecimal(entry.getAmount()));
+        switch (sortOrder) {
+            case DATE_ASCENDING:
+                return dateOrder;
+            case PRICE_ASCENDING:
+                return priceOrder.thenComparing(dateOrder.reversed());
+            case PRICE_DESCENDING:
+                return priceOrder.reversed().thenComparing(dateOrder.reversed());
+            case DATE_DESCENDING:
+            default:
+                return dateOrder.reversed();
+        }
+    }
+
+    /** 同时只启用一种排序；价格相同时按日期降序排列。 */
+    enum SortOrder {
+        DATE_ASCENDING,
+        DATE_DESCENDING,
+        PRICE_ASCENDING,
+        PRICE_DESCENDING;
+
+        boolean isDateSort() {
+            return this == DATE_ASCENDING || this == DATE_DESCENDING;
+        }
+
+        boolean isAscending() {
+            return this == DATE_ASCENDING || this == PRICE_ASCENDING;
+        }
+
+        static SortOrder fromSavedValue(String value) {
+            if (value == null) {
+                return DATE_DESCENDING;
+            }
+            try {
+                return valueOf(value);
+            } catch (IllegalArgumentException exception) {
+                return DATE_DESCENDING;
+            }
+        }
     }
 
     private boolean matchesDate(String date) {

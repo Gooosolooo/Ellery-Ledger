@@ -16,6 +16,7 @@ $compilerExecutable = if ($env:JAVA_HOME) { Join-Path $env:JAVA_HOME 'bin/javac.
     (Join-Path $workspaceDirectory 'tests/SourceSelectionSessionTest.java') `
     (Join-Path $workspaceDirectory 'tests/ReceiptParserTest.java') `
     (Join-Path $workspaceDirectory 'tests/LedgerFilterTest.java') `
+    (Join-Path $workspaceDirectory 'tests/LedgerSortTest.java') `
     (Join-Path $workspaceDirectory 'tests/RecognitionDraftsTest.java')
 if ($LASTEXITCODE -ne 0) { throw '业务测试编译失败' }
 & $javaExecutable -cp $testOutputDirectory cn.local.jiyibi.ReceiptParserTest
@@ -26,6 +27,9 @@ if ($LASTEXITCODE -ne 0) { throw 'Source selection tests failed' }
 
 & $javaExecutable -cp $testOutputDirectory cn.local.jiyibi.LedgerFilterTest
 if ($LASTEXITCODE -ne 0) { throw 'Ledger filter tests failed' }
+
+& $javaExecutable -cp $testOutputDirectory cn.local.jiyibi.LedgerSortTest
+if ($LASTEXITCODE -ne 0) { throw 'Ledger sort tests failed' }
 
 & $javaExecutable -cp $testOutputDirectory cn.local.jiyibi.RecognitionDraftsTest
 if ($LASTEXITCODE -ne 0) { throw 'Recognition draft tests failed' }

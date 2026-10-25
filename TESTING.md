@@ -1,5 +1,19 @@
 # Verification
 
+## Sort arrow appearance (2026-10-25, source only)
+
+- Date and price buttons now use the ⇋ glyph rotated clockwise by 90 degrees, clipped into independently colored halves. Ascending highlights the right/up half; descending highlights the left/down half; inactive halves are gray.
+- Both inactive labels include 升/降序. Light button backgrounds keep blue and gray directions distinguishable; text and accessibility descriptions retain the selected order.
+- Source compilation and Android Lint verified. Native glyph appearance, clipping, button fit and direction colors still need a device check after building in Android Studio; no APK generated or installed.
+
+## Independent date / price sorting (2026-10-25, source only)
+
+- Added 51 checks for independent date/price ascending/descending order, mutually exclusive active modes, numeric decimal comparison (including different decimal scales), date-descending tie breaks, stable same-date/same-price ordering and unchanged source records.
+- Covered sorting after combined date/category/keyword filters, retaining sort order when filters change, unchanged count/total, draft exclusion, empty results and saved-state value restoration with backward-compatible defaults.
+- Current core suite passed: 87 parser checks, 14 source-selection checks, 42 filter checks, 51 sort checks and 43 recognition-draft checks (237 total).
+- Java source compilation and Android Lint passed (0 errors; warnings concern existing platform/resources/source-panel issues). No APK was generated or installed.
+- Device checks pending: two separate button positions, active labels/highlights, tapping to toggle order, filter/reset interaction and returning from editing or activity recreation.
+
 ## Ledger filters (2026-10-23, source only)
 
 - Updated 42 synthetic-data checks for confirmed-only lists, day/month filtering, combined category/keyword matching, custom/empty categories, literal search punctuation, English case folding, stable date ordering, nonmutation of source records, empty results and reset criteria.

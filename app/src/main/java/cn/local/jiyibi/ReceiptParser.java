@@ -26,9 +26,7 @@ public final class ReceiptParser {
 
     private ReceiptParser() { }
 
-    public static LedgerEntry parse(String text) { return parse(text, false); }
-
-    public static LedgerEntry parse(String text, boolean amountOnly) {
+    public static LedgerEntry parse(String text) {
         String normalized = normalize(text);
         List<String> lines = new ArrayList<>();
         for (String line : normalized.split("\\n")) {
@@ -50,7 +48,6 @@ public final class ReceiptParser {
         if (amounts.size() == 1 && !isUnpaidOrRefund(normalized)) {
             entry.setAmount(amounts.iterator().next());
         }
-        if (amountOnly) { return entry; }
         Set<String> paymentDates = dates(String.join("\n", values(lines, PAYMENT_DATE_KEYS)));
         Set<String> candidates = paymentDates.isEmpty() ? dates(normalized) : paymentDates;
         if (candidates.size() == 1) { entry.setDate(candidates.iterator().next()); }

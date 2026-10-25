@@ -8,7 +8,6 @@ import android.graphics.drawable.RippleDrawable;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
-import android.widget.Switch;
 import android.widget.TextView;
 
 /** 四个主页的莫兰迪配色；类别、日期和状态标签保留独立语义颜色。 */
@@ -59,7 +58,7 @@ enum PageTheme {
         if (BlueUi.hasFixedTagColors(view)) {
             return;
         }
-        if (view instanceof Button && !(view instanceof Switch)) {
+        if (view instanceof Button) {
             Button button = (Button) view;
             int textColor = button.getCurrentTextColor();
             styleButton(button, textColor == Color.WHITE);
@@ -79,11 +78,6 @@ enum PageTheme {
                     shape.setColor(resolve(colors.getDefaultColor()));
                 }
             }
-        }
-        if (view instanceof Switch) {
-            ((Switch) view).setTrackTintList(new ColorStateList(
-                    new int[][]{new int[]{android.R.attr.state_checked}, new int[]{}},
-                    new int[]{primaryColor, borderColor}));
         }
         if (view instanceof ViewGroup) {
             ViewGroup group = (ViewGroup) view;

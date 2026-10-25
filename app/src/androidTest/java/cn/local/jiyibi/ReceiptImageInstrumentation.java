@@ -34,7 +34,7 @@ public final class ReceiptImageInstrumentation {
                 throw new AssertionError("原图本地 OCR 未完成");
             }
             Text text = recognized.get();
-            LedgerEntry entry = LocalOcr.extract(text, false);
+            LedgerEntry entry = LocalOcr.extract(text);
             JSONObject report = new JSONObject();
             report.put("amount", entry.getAmount()).put("date", entry.getDate()).put("shop", entry.getShop())
                     .put("product", entry.getProduct()).put("note", entry.getNote()).put("status", entry.getStatus());
@@ -57,11 +57,7 @@ public final class ReceiptImageInstrumentation {
                     || !entry.getNote().isEmpty() || !LedgerEntry.DRAFT.equals(entry.getStatus())) {
                 throw new AssertionError("原图提取未达到金额、日期、店铺、商品及空备注的预期，请检查报告");
             }
-            LedgerEntry amountOnly = LocalOcr.extract(text, true);
-            if (!"192.5".equals(amountOnly.getAmount()) || !amountOnly.item().isEmpty()) {
-                throw new AssertionError("原图的仅金额模式异常");
-            }
-            output.putString("stream", "PASS: original image offline OCR and amount-only extraction; no ledger entries created\n");
+            output.putString("stream", "PASS: original image offline OCR with amount, date, merchant and product extraction; no ledger entries created\n");
             instrumentation.finish(-1, output);
         } catch (Exception | AssertionError exception) {
             output.putString("stream", "FAIL: " + exception + "\n");

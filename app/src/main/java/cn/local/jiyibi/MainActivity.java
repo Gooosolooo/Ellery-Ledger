@@ -5,6 +5,7 @@ import android.app.Activity;
 import android.app.AlertDialog;
 import android.app.StatusBarManager;
 import android.content.ComponentName;
+import android.content.ActivityNotFoundException;
 import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.graphics.drawable.Icon;
@@ -13,7 +14,6 @@ import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.graphics.Insets;
 import android.graphics.drawable.GradientDrawable;
-import android.content.res.ColorStateList;
 import android.view.Gravity;
 import android.view.ViewGroup;
 import android.graphics.Typeface;
@@ -21,6 +21,7 @@ import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.provider.Settings;
+import android.provider.MediaStore;
 import android.text.InputType;
 import android.view.View;
 import android.view.WindowInsets;
@@ -31,7 +32,6 @@ import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.Spinner;
-import android.widget.Switch;
 import android.widget.TextView;
 import android.widget.Toast;
 import androidx.viewpager.widget.PagerAdapter;
@@ -81,7 +81,6 @@ public final class MainActivity extends Activity {
     private Spinner categoryField;
     private final List<String> categoryOptions = new ArrayList<>();
     private final List<Button> homeTabButtons = new ArrayList<>();
-    private final List<Switch> recognitionSwitches = new ArrayList<>();
     private ViewPager homePager;
     private LedgerFilter ledgerFilter = new LedgerFilter("", null, "");
 
@@ -92,7 +91,8 @@ public final class MainActivity extends Activity {
         activeTab = state == null ? 0 : state.getInt("active_tab", 0);
         if (state != null) {
             ledgerFilter = new LedgerFilter(state.getString("ledger_filter_date", ""),
-                    state.getString("ledger_filter_category"), state.getString("ledger_filter_keyword", ""));
+                    state.getString("ledger_filter_category"), state.getString("ledger_filter_keyword", ""),
+                    LedgerFilter.SortOrder.fromSavedValue(state.getString("ledger_filter_sort")));
         }
         if (Build.VERSION.SDK_INT >= 33
                 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
@@ -145,7 +145,6 @@ public final class MainActivity extends Activity {
     private void resetPage(String title) {
         homePager = null;
         homeTabButtons.clear();
-        recognitionSwitches.clear();
         sourcePanel = null;
         sourceTarget = null;
         gestureTarget = null;
@@ -366,19 +365,20 @@ public final class MainActivity extends Activity {
         BlueUi.appendText(summary, "¥ " + total.setScale(2).toPlainString(), 36, BlueUi.DEEP_BLUE, true, 12);
         BlueUi.appendText(summary, "待核对 " + drafts + " 笔  ·  确认后计入支出", 13, BlueUi.SUB, false, 12);
         body.addView(summary, BlueUi.below(this, 4));
-        body.addView(BlueUi.button(this, "选截图识别", true, () -> pick("image/*", PICK_IMAGE)), BlueUi.below(this, 16));
-        body.addView(BlueUi.button(this, "从剪贴板识别图片", false, this::recognizeClipboardImage), BlueUi.below(this, 10));
-        LinearLayout actions = BlueUi.row(this);
-        Button manual = BlueUi.button(this, "手工记账", false, this::newManualEntry);
-        Button tutorial = BlueUi.button(this, "识别教程", false, this::showCaptureSetup);
-        LinearLayout.LayoutParams left = new LinearLayout.LayoutParams(0, dp(48), 1f);
+        text("图片记账", 20);
+        BlueUi.appendText(body, "识别后核对，确认再入账。", 13, BlueUi.SUB, false, 8);
+        LinearLayout imageActions = BlueUi.row(this);
+        imageActions.setBaselineAligned(false);
+        Button album = BlueUi.button(this, "从相册中选择图片", true, this::pickReceiptImage);
+        Button clipboard = BlueUi.button(this, "粘贴图片", false, this::recognizeClipboardImage);
+        LinearLayout.LayoutParams left = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f);
         left.setMarginEnd(dp(6));
-        LinearLayout.LayoutParams right = new LinearLayout.LayoutParams(0, dp(48), 1f);
+        LinearLayout.LayoutParams right = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f);
         right.setMarginStart(dp(6));
-        actions.addView(manual, left);
-        actions.addView(tutorial, right);
-        body.addView(actions, BlueUi.below(this, 10));
-        addRecognitionMode();
+        imageActions.addView(album, left);
+        imageActions.addView(clipboard, right);
+        body.addView(imageActions, BlueUi.below(this, 10));
+        body.addView(BlueUi.button(this, "手工记账", false, this::newManualEntry), BlueUi.below(this, 10));
         text("最近账目", 20);
     }
 
@@ -387,32 +387,6 @@ public final class MainActivity extends Activity {
         entry.setDate(LocalDate.now().toString());
         database.save(entry);
         showEditor(entry);
-    }
-
-    private void addRecognitionMode() {
-        LinearLayout mode = BlueUi.card(this);
-        Switch amountOnlySwitch = new Switch(this);
-        amountOnlySwitch.setText("仅识别金额");
-        amountOnlySwitch.setTextSize(15);
-        amountOnlySwitch.setTextColor(BlueUi.INK);
-        amountOnlySwitch.setMinHeight(dp(48));
-        amountOnlySwitch.setChecked(RecognitionPreferences.isAmountOnly(this));
-        amountOnlySwitch.setThumbTintList(ColorStateList.valueOf(BlueUi.CARD));
-        amountOnlySwitch.setTrackTintList(new ColorStateList(
-                new int[][]{new int[]{android.R.attr.state_checked}, new int[]{}},
-                new int[]{BlueUi.BLUE, BlueUi.BORDER}));
-        recognitionSwitches.add(amountOnlySwitch);
-        amountOnlySwitch.setOnCheckedChangeListener((view, enabled) -> {
-            RecognitionPreferences.setAmountOnly(this, enabled);
-            for (Switch modeSwitch : recognitionSwitches) {
-                if (modeSwitch.isChecked() != enabled) {
-                    modeSwitch.setChecked(enabled);
-                }
-            }
-        });
-        mode.addView(amountOnlySwitch);
-        BlueUi.appendText(mode, "关闭时同时尝试识别店铺、商品和日期。评价由你填写。", 13, BlueUi.SUB, false, 4);
-        body.addView(mode, BlueUi.below(this, 16));
     }
 
     private void addEntryCard(LedgerEntry entry) {
@@ -481,7 +455,6 @@ public final class MainActivity extends Activity {
 
     private void showSettings() {
         text("识别与权限", 20);
-        addRecognitionMode();
         button("页面识别权限与使用教程", this::showCaptureSetup);
         button("最近一次识别诊断", () -> new AlertDialog.Builder(this)
                 .setTitle("最近一次识别诊断").setMessage(CaptureDiagnostics.read(this))
@@ -805,6 +778,7 @@ public final class MainActivity extends Activity {
         state.putString("ledger_filter_date", ledgerFilter.getDatePrefix());
         state.putString("ledger_filter_category", ledgerFilter.getCategory());
         state.putString("ledger_filter_keyword", ledgerFilter.getKeyword());
+        state.putString("ledger_filter_sort", ledgerFilter.getSortOrder().name());
         super.onSaveInstanceState(state);
     }
 
@@ -820,6 +794,26 @@ public final class MainActivity extends Activity {
             showHome();
         } else {
             super.onBackPressed();
+        }
+    }
+
+    /** 图片使用照片选择界面；Excel 和备份仍使用文档选择器。 */
+    private void pickReceiptImage() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            Intent picker = new Intent(MediaStore.ACTION_PICK_IMAGES).setType("image/*");
+            try {
+                startActivityForResult(picker, PICK_IMAGE);
+                return;
+            } catch (ActivityNotFoundException exception) {
+                // 某些定制系统未提供照片选择器，继续尝试系统相册。
+            }
+        }
+        Intent gallery = new Intent(Intent.ACTION_PICK)
+                .setDataAndType(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, "image/*");
+        try {
+            startActivityForResult(gallery, PICK_IMAGE);
+        } catch (ActivityNotFoundException exception) {
+            message("设备没有可用的照片选择器，请从相册将图片分享给 Ellery Ledger");
         }
     }
 

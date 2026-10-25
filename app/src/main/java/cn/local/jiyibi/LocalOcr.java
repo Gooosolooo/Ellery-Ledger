@@ -21,10 +21,9 @@ public final class LocalOcr {
     public static void recognize(Context context, InputImage image, String source, Runnable release) {
         String readAt = java.time.LocalDateTime.now().toString();
         Context application = context.getApplicationContext();
-        boolean amountOnly = RecognitionPreferences.isAmountOnly(application);
         TextRecognizer recognizer = TextRecognition.getClient(new ChineseTextRecognizerOptions.Builder().build());
         recognizer.process(image).addOnSuccessListener(result -> {
-            LedgerEntry entry = extract(result, amountOnly);
+            LedgerEntry entry = extract(result);
             String warning = entry.getAmount().isBlank() ? RecognitionDrafts.MISSING_AMOUNT_MESSAGE : "";
             persistDraft(application, RecognitionDrafts.prepare(entry, source, readAt, warning));
         }).addOnFailureListener(exception -> {
@@ -40,11 +39,10 @@ public final class LocalOcr {
     /** 当前页面识别结果由调用方校验来源后保存；失败时保留本次页面信息生成待核对草稿。 */
     public static void recognizeCurrentPage(Context context, InputImage image,
             java.util.function.Consumer<LedgerEntry> success, Runnable failure, Runnable release) {
-        boolean amountOnly = RecognitionPreferences.isAmountOnly(context);
         TextRecognizer recognizer = TextRecognition.getClient(new ChineseTextRecognizerOptions.Builder().build());
         recognizer.process(image).addOnSuccessListener(result -> {
                     CaptureDiagnostics.recordRecognizedText(context, result.getText());
-                    success.accept(extract(result, amountOnly));
+                    success.accept(extract(result));
                 })
                 .addOnFailureListener(exception -> failure.run())
                 .addOnCompleteListener(task -> {
@@ -53,7 +51,7 @@ public final class LocalOcr {
                 });
     }
 
-    public static LedgerEntry extract(Text result, boolean amountOnly) {
+    public static LedgerEntry extract(Text result) {
         List<ReceiptLine> lines = new ArrayList<>();
         for (Text.TextBlock block : result.getTextBlocks()) {
             for (Text.Line line : block.getLines()) {
@@ -63,8 +61,8 @@ public final class LocalOcr {
                 }
             }
         }
-        LedgerEntry entry = lines.isEmpty() ? ReceiptParser.parse(result.getText(), amountOnly)
-                : ReceiptLayoutParser.parse(lines, amountOnly);
+        LedgerEntry entry = lines.isEmpty() ? ReceiptParser.parse(result.getText())
+                : ReceiptLayoutParser.parse(lines);
         return entry;
     }
 
